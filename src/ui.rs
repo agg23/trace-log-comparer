@@ -61,6 +61,9 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut state: State) -> Result<(
 
     ui_state.list_state.select(Some(selected_line));
 
+    let mut last_keycode: Option<KeyCode> = None;
+    let mut key_repeat_count = 0;
+
     loop {
         terminal.draw(|f| {
             // let size = f.size();
@@ -92,39 +95,63 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut state: State) -> Result<(
                 )
                 .highlight_symbol(">> ");
 
-            f.render_widget(list2, chunks[1]);
+            f.render_stateful_widget(list2, chunks[1], &mut ui_state.list_state);
         })?;
 
         if crossterm::event::poll(Duration::from_millis(100))? {
             if let Event::Key(key) = event::read()? {
+                let mut repeat = false;
+
+                if let Some(code) = last_keycode {
+                    if code == key.code {
+                        if key_repeat_count < 5 {
+                            key_repeat_count += 1;
+                        } else {
+                            repeat = true;
+                        }
+                    }
+                }
+
+                let horizontal_step_size = if repeat { 5 } else { 1 };
+
                 match key.code {
                     KeyCode::Right => {
-                        // TODO: Check upper bound
                         let min_line_length = if longest_line_length > 10 {
                             longest_line_length - 10
                         } else {
                             0
                         };
 
-                        if ui_state.horizontal_offset < min_line_length {
-                            ui_state.horizontal_offset += 1;
+                        if ui_state.horizontal_offset + horizontal_step_size < min_line_length {
+                            ui_state.horizontal_offset += horizontal_step_size;
 
                             (file1_list_lines, file2_list_lines) =
                                 build_lists(&file1_lines, &file2_lines, ui_state.horizontal_offset);
                         }
                     }
                     KeyCode::Left => {
-                        if ui_state.horizontal_offset != 0 {
-                            ui_state.horizontal_offset -= 1;
-
-                            (file1_list_lines, file2_list_lines) =
-                                build_lists(&file1_lines, &file2_lines, ui_state.horizontal_offset);
+                        if ui_state.horizontal_offset >= horizontal_step_size {
+                            ui_state.horizontal_offset -= horizontal_step_size;
+                        } else {
+                            ui_state.horizontal_offset = 0;
                         }
+
+                        (file1_list_lines, file2_list_lines) =
+                            build_lists(&file1_lines, &file2_lines, ui_state.horizontal_offset);
                     }
                     KeyCode::Esc => break,
                     _ => {}
                 }
+
+                last_keycode = Some(key.code.clone());
+            } else {
+                last_keycode = None;
+                key_repeat_count = 0;
             }
+        } else {
+            // No event, kill repeat
+            last_keycode = None;
+            key_repeat_count = 0;
         }
     }
 
