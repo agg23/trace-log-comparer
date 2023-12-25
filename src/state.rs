@@ -3,7 +3,7 @@ use std::{
     io::{self, BufRead, BufReader, Seek, SeekFrom},
 };
 
-use itertools::{EitherOrBoth, Itertools};
+use itertools::{Diff, EitherOrBoth, Itertools};
 use tui::{
     style::{Color, Modifier, Style},
     text::{Span, Spans},
@@ -45,6 +45,15 @@ pub enum DiffSection {
     Modified { left: String, right: String },
     Same(String),
     Removed(String),
+}
+
+impl DiffSection {
+    pub fn left_len(&self) -> usize {
+        match self {
+            DiffSection::Added(a) | DiffSection::Same(a) | DiffSection::Removed(a) => a.len(),
+            DiffSection::Modified { left, right } => left.len(),
+        }
+    }
 }
 
 impl<'a> State<'a> {
@@ -251,6 +260,62 @@ impl<'a> State<'a> {
         reader.read_line(&mut buffer)?;
 
         Ok(buffer)
+    }
+
+    pub fn find_next_diff(&self, match_line: usize, match_offset: usize) -> Option<(usize, usize)> {
+        for (line_number, line_diffs) in self.line_diffs[match_line..].iter().enumerate() {
+            // Make sure index is actually to the start of the lines
+            let line_number = line_number + match_line;
+            let mut line_offset = 0;
+
+            for diff in line_diffs {
+                match diff {
+                    DiffSection::Added(_)
+                    | DiffSection::Modified { left: _, right: _ }
+                    | DiffSection::Removed(_) => {
+                        if line_offset > match_offset || line_number > match_line {
+                            // This is the next diff
+                            return Some((line_number, line_offset));
+                        }
+                    }
+                    _ => {}
+                }
+
+                line_offset += diff.left_len();
+            }
+        }
+
+        None
+    }
+
+    pub fn find_prev_diff(&self, match_line: usize, match_offset: usize) -> Option<(usize, usize)> {
+        for (line_number, line_diffs) in self.line_diffs[..match_line].iter().enumerate().rev() {
+            let line_width = line_diffs
+                .iter()
+                .map(|diff| diff.left_len())
+                .reduce(|acc, width| acc + width)
+                .unwrap_or(0);
+
+            let mut line_offset = line_width;
+
+            for diff in line_diffs.iter().rev() {
+                match diff {
+                    DiffSection::Added(_)
+                    | DiffSection::Modified { left: _, right: _ }
+                    | DiffSection::Removed(_) => {
+                        if line_offset < match_offset || line_number < match_line {
+                            // This is the prev diff
+                            return Some((line_number, line_offset));
+                        }
+                    }
+                    _ => {}
+                }
+
+                line_offset -= diff.left_len();
+            }
+        }
+
+        None
     }
 }
 

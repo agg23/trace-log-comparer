@@ -42,6 +42,8 @@ pub fn build_app(state: State) -> Result<(), io::Error> {
 fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut state: State) -> Result<(), io::Error> {
     let mut selected_line = state.selected_line;
 
+    let mut selected_diff_offset = 0;
+
     let mut ui_state = UIState {
         list_state: ListState::default(),
         horizontal_offset: 0,
@@ -121,7 +123,28 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut state: State) -> Result<(
 
                         state.build_lines(ui_state.horizontal_offset);
                     }
-                    KeyCode::Down => {}
+                    KeyCode::Char('N') => {
+                        // Prev diff
+                        if let Some((prev_diff_line, prev_diff_offset)) =
+                            state.find_prev_diff(selected_line, selected_diff_offset)
+                        {
+                            selected_line = prev_diff_line;
+                            selected_diff_offset = prev_diff_offset;
+
+                            ui_state.list_state.select(Some(selected_line));
+                        }
+                    }
+                    KeyCode::Char('n') => {
+                        // Next diff
+                        if let Some((next_diff_line, next_diff_offset)) =
+                            state.find_next_diff(selected_line, selected_diff_offset)
+                        {
+                            selected_line = next_diff_line;
+                            selected_diff_offset = next_diff_offset;
+
+                            ui_state.list_state.select(Some(selected_line));
+                        }
+                    }
                     KeyCode::Esc => break,
                     _ => {}
                 }
