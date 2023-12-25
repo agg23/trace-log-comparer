@@ -25,6 +25,7 @@ pub struct State<'a> {
 
     pub longest_line_length: usize,
     pub selected_line: usize,
+    pub first_line_index: usize,
 
     file1_spans: Vec<Spans<'a>>,
     file2_spans: Vec<Spans<'a>>,
@@ -75,6 +76,7 @@ impl<'a> State<'a> {
 
             longest_line_length: 0,
             selected_line: 0,
+            first_line_index: 0,
 
             line_diffs: vec![],
 
@@ -154,6 +156,8 @@ impl<'a> State<'a> {
                 file2_lines.push(line2);
             }
         }
+
+        self.first_line_index = bottom_line_index;
 
         (file1_lines, file2_lines)
     }
@@ -289,7 +293,8 @@ impl<'a> State<'a> {
     }
 
     pub fn find_prev_diff(&self, match_line: usize, match_offset: usize) -> Option<(usize, usize)> {
-        for (line_number, line_diffs) in self.line_diffs[..match_line].iter().enumerate().rev() {
+        for (line_number, line_diffs) in self.line_diffs[..match_line + 1].iter().enumerate().rev()
+        {
             let line_width = line_diffs
                 .iter()
                 .map(|diff| diff.left_len())
@@ -299,6 +304,8 @@ impl<'a> State<'a> {
             let mut line_offset = line_width;
 
             for diff in line_diffs.iter().rev() {
+                line_offset -= diff.left_len();
+
                 match diff {
                     DiffSection::Added(_)
                     | DiffSection::Modified { left: _, right: _ }
@@ -310,8 +317,6 @@ impl<'a> State<'a> {
                     }
                     _ => {}
                 }
-
-                line_offset -= diff.left_len();
             }
         }
 

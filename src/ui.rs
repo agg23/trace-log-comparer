@@ -44,7 +44,6 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut state: State) -> Result<(
 
     state.build_state((size.height as usize) * 2);
 
-    let mut start_line_number = 1;
     let mut selected_diff_offset = 0;
 
     let mut ui_state = UIState {
@@ -112,7 +111,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut state: State) -> Result<(
                         if ui_state.horizontal_offset + horizontal_step_size < min_line_length {
                             ui_state.horizontal_offset += horizontal_step_size;
 
-                            state.build_lines(ui_state.horizontal_offset, start_line_number);
+                            state.build_lines(ui_state.horizontal_offset, state.first_line_index);
                         }
                     }
                     KeyCode::Left => {
@@ -122,7 +121,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut state: State) -> Result<(
                             ui_state.horizontal_offset = 0;
                         }
 
-                        state.build_lines(ui_state.horizontal_offset, start_line_number);
+                        state.build_lines(ui_state.horizontal_offset, state.first_line_index);
                     }
                     KeyCode::Down => {
                         if state.selected_line < state.file1_list_lines.len()
@@ -145,10 +144,12 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut state: State) -> Result<(
                         if let Some((prev_diff_line, prev_diff_offset)) =
                             state.find_prev_diff(state.selected_line, selected_diff_offset)
                         {
-                            state.selected_line = prev_diff_line;
-                            selected_diff_offset = prev_diff_offset;
-
-                            ui_state.list_state.select(Some(state.selected_line));
+                            selected_diff_offset = select_diff(
+                                &mut state,
+                                &mut ui_state,
+                                prev_diff_line,
+                                prev_diff_offset,
+                            );
                         }
                     }
                     KeyCode::Char('n') => {
@@ -156,10 +157,12 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut state: State) -> Result<(
                         if let Some((next_diff_line, next_diff_offset)) =
                             state.find_next_diff(state.selected_line, selected_diff_offset)
                         {
-                            state.selected_line = next_diff_line;
-                            selected_diff_offset = next_diff_offset;
-
-                            ui_state.list_state.select(Some(state.selected_line));
+                            selected_diff_offset = select_diff(
+                                &mut state,
+                                &mut ui_state,
+                                next_diff_line,
+                                next_diff_offset,
+                            );
                         }
                     }
                     KeyCode::Esc => break,
@@ -179,4 +182,20 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut state: State) -> Result<(
     }
 
     Ok(())
+}
+
+fn select_diff(
+    state: &mut State,
+    ui_state: &mut UIState,
+    diff_line: usize,
+    diff_offset: usize,
+) -> usize {
+    state.selected_line = diff_line;
+
+    ui_state.horizontal_offset = if diff_offset > 5 { diff_offset - 5 } else { 0 };
+
+    ui_state.list_state.select(Some(state.selected_line));
+    state.build_lines(ui_state.horizontal_offset, state.first_line_index);
+
+    diff_offset
 }
