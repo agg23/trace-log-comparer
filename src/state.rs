@@ -3,6 +3,8 @@ use std::{
     io::{self, BufRead, BufReader, Seek, SeekFrom},
 };
 
+use itertools::{EitherOrBoth, Itertools};
+
 pub struct State {
     pub first_diff: Option<DiffPosition>,
 
@@ -17,6 +19,14 @@ pub struct DiffPosition {
     pub line_index: usize,
     pub file1_offset: usize,
     pub file2_offset: usize,
+}
+
+#[derive(Clone)]
+pub enum DiffSection {
+    Added(String),
+    Modified { left: String, right: String },
+    Same(String),
+    Removed(String),
 }
 
 impl State {
@@ -57,6 +67,91 @@ impl State {
         }
 
         (file1_lines, file2_lines)
+    }
+
+    pub fn calculate_diffs(
+        &mut self,
+        file1_lines: &Vec<String>,
+        file2_lines: &Vec<String>,
+    ) -> Vec<Vec<DiffSection>> {
+        file1_lines
+            .iter()
+            .zip(file2_lines)
+            .map(|(line1, line2)| self.calculate_line_diffs(line1, line2))
+            .collect()
+    }
+
+    fn calculate_line_diffs(&self, line1: &String, line2: &String) -> Vec<DiffSection> {
+        let mut last_diff: Option<DiffSection> = None;
+
+        let mut diffs: Vec<DiffSection> = vec![];
+
+        let mut merge_diff = |last_diff: &mut Option<DiffSection>, new_diff: DiffSection| {
+            if let Some(mut inner_last_diff) = last_diff.take() {
+                match (&mut inner_last_diff, &new_diff) {
+                    (DiffSection::Added(ref mut a), &DiffSection::Added(ref b))
+                    | (DiffSection::Same(ref mut a), &DiffSection::Same(ref b))
+                    | (DiffSection::Removed(ref mut a), &DiffSection::Removed(ref b)) => {
+                        a.push_str(&b);
+                        // We consumed the Option, so we have to re-place the value
+                        *last_diff = Some(inner_last_diff);
+                    }
+                    (
+                        DiffSection::Modified {
+                            left: ref mut left_a,
+                            right: ref mut right_a,
+                        },
+                        DiffSection::Modified {
+                            left: ref left_b,
+                            right: ref right_b,
+                        },
+                    ) => {
+                        // Combine both sides
+                        left_a.push_str(&left_b);
+                        right_a.push_str(&right_b);
+                        *last_diff = Some(inner_last_diff);
+                    }
+                    _ => {
+                        // They don't match. Last diff is completed. Push new diff
+                        diffs.push(inner_last_diff);
+                        *last_diff = Some(new_diff);
+                    }
+                }
+            } else {
+                // Directly push new diff
+                *last_diff = Some(new_diff);
+            }
+        };
+
+        for combined_chars in line1.chars().zip_longest(line2.chars()) {
+            match combined_chars {
+                EitherOrBoth::Both(char1, char2) => {
+                    if char1 == char2 {
+                        merge_diff(&mut last_diff, DiffSection::Same(char1.to_string()));
+                    } else {
+                        merge_diff(
+                            &mut last_diff,
+                            DiffSection::Modified {
+                                left: char1.to_string(),
+                                right: char2.to_string(),
+                            },
+                        );
+                    }
+                }
+                EitherOrBoth::Left(char) => {
+                    merge_diff(&mut last_diff, DiffSection::Removed(char.to_string()))
+                }
+                EitherOrBoth::Right(char) => {
+                    merge_diff(&mut last_diff, DiffSection::Added(char.to_string()))
+                }
+            }
+        }
+
+        if let Some(last_diff) = last_diff {
+            diffs.push(last_diff);
+        }
+
+        diffs
     }
 
     fn read_line_at_offset(&mut self, file1: bool, offset: u64) -> io::Result<String> {
