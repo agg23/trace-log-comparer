@@ -108,12 +108,16 @@ impl<'a> State<'a> {
         self.file1_spans = file1_spans;
         self.file2_spans = file2_spans;
 
-        self.build_lines(0);
+        self.build_lines(0, 1);
     }
 
-    pub fn build_lines(&mut self, horizontal_offset: usize) {
-        let (file1_list_lines, file2_list_lines) =
-            build_lines(&self.file1_spans, &self.file2_spans, horizontal_offset);
+    pub fn build_lines(&mut self, horizontal_offset: usize, start_line_number: usize) {
+        let (file1_list_lines, file2_list_lines) = build_lines(
+            &self.file1_spans,
+            &self.file2_spans,
+            horizontal_offset,
+            start_line_number,
+        );
 
         self.file1_list_lines = file1_list_lines;
         self.file2_list_lines = file2_list_lines;
@@ -381,36 +385,51 @@ fn build_lines<'a>(
     file1_spans: &Vec<Spans<'a>>,
     file2_spans: &Vec<Spans<'a>>,
     horizontal_offset: usize,
+    start_line_number: usize,
 ) -> (Vec<ListItem<'a>>, Vec<ListItem<'a>>) {
-    let add_left_placeholder = |spans: Spans<'a>, original_length: usize| -> ListItem<'a> {
-        let mut string = spans;
-
+    let add_left_placeholder = |spans: Spans<'a>, original_length: usize| -> Spans<'a> {
         if original_length == 0 {
             // String was empty to begin with. EOF
-            string = Spans::from(Span::styled(
+            Spans::from(Span::styled(
                 "EOF",
                 Style::default().add_modifier(Modifier::DIM),
-            ));
-        } else if string.width() == 0 {
-            string = Spans::from(Span::styled(
+            ))
+        } else if spans.width() == 0 {
+            Spans::from(Span::styled(
                 "<==",
                 Style::default().add_modifier(Modifier::DIM),
-            ));
+            ))
+        } else {
+            spans
         }
-
-        ListItem::new(string)
     };
 
     let process_spans_into_lines = |spans: &Vec<Spans<'a>>| -> Vec<ListItem<'a>> {
         spans
             .iter()
-            .map(|spans| {
+            .enumerate()
+            .map(|(index, spans)| {
                 let original_length = spans.width();
 
-                add_left_placeholder(
+                let mut spans = add_left_placeholder(
                     spans_substring(spans.clone(), horizontal_offset),
                     original_length,
-                )
+                );
+
+                let full_sized_number_string = format!("{} ", start_line_number + index);
+
+                let number_string = if full_sized_number_string.len() <= 9 {
+                    format!("{:8} ", start_line_number + index)
+                } else {
+                    full_sized_number_string
+                };
+
+                spans.0.insert(
+                    0,
+                    Span::styled(number_string, Style::default().add_modifier(Modifier::DIM)),
+                );
+
+                ListItem::new(spans)
             })
             .collect()
     };

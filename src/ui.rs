@@ -42,6 +42,7 @@ pub fn build_app(state: State) -> Result<(), io::Error> {
 fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut state: State) -> Result<(), io::Error> {
     let mut selected_line = state.selected_line;
 
+    let mut start_line_number = 1;
     let mut selected_diff_offset = 0;
 
     let mut ui_state = UIState {
@@ -111,7 +112,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut state: State) -> Result<(
                         if ui_state.horizontal_offset + horizontal_step_size < min_line_length {
                             ui_state.horizontal_offset += horizontal_step_size;
 
-                            state.build_lines(ui_state.horizontal_offset);
+                            state.build_lines(ui_state.horizontal_offset, start_line_number);
                         }
                     }
                     KeyCode::Left => {
@@ -121,7 +122,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut state: State) -> Result<(
                             ui_state.horizontal_offset = 0;
                         }
 
-                        state.build_lines(ui_state.horizontal_offset);
+                        state.build_lines(ui_state.horizontal_offset, start_line_number);
                     }
                     KeyCode::Char('N') => {
                         // Prev diff
