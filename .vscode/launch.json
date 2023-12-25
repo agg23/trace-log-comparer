@@ -21,7 +21,7 @@
       },
       "args": [
         "/Users/adam/code/rust/virtualfriend/instructions.log",
-        "/Users/adam/Downloads/mednafen/Nintendo - Virtual Boy/wariolandstarup.log"
+        "/Users/adam/Downloads/mednafen/Nintendo - Virtual Boy/wariolandstartupnoinst.log"
       ],
       "cwd": "${workspaceFolder}"
     }

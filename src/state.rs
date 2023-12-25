@@ -25,6 +25,7 @@ pub struct State<'a> {
 
     pub longest_line_length: usize,
     pub selected_line: usize,
+    pub initial_horizontal_offset: usize,
     pub first_line_index: usize,
 
     file1_spans: Vec<Spans<'a>>,
@@ -36,6 +37,7 @@ pub struct State<'a> {
 
 pub struct DiffPosition {
     pub line_index: usize,
+    pub line_offset: usize,
     pub file1_offset: usize,
     pub file2_offset: usize,
 }
@@ -76,6 +78,7 @@ impl<'a> State<'a> {
 
             longest_line_length: 0,
             selected_line: 0,
+            initial_horizontal_offset: 0,
             first_line_index: 0,
 
             line_diffs: vec![],
@@ -90,9 +93,14 @@ impl<'a> State<'a> {
 
     pub fn build_state(&mut self, lines_to_load: usize) {
         let (file1_raw_lines, file2_raw_lines) = if let Some(diff) = &self.first_diff {
-            self.selected_line = diff.line_index;
+            let diff_line_index = diff.line_index;
+            self.initial_horizontal_offset = diff.line_offset;
 
-            self.get_lines_around_line(diff.line_index, lines_to_load)
+            let lines = self.get_lines_around_line(diff_line_index, lines_to_load);
+
+            self.selected_line = diff_line_index - self.first_line_index;
+
+            lines
         } else {
             self.get_lines_around_line(0, lines_to_load)
         };
@@ -106,7 +114,13 @@ impl<'a> State<'a> {
         self.file1_spans = file1_spans;
         self.file2_spans = file2_spans;
 
-        self.build_lines(0, 1);
+        self.initial_horizontal_offset = if self.initial_horizontal_offset > 5 {
+            self.initial_horizontal_offset - 5
+        } else {
+            0
+        };
+
+        self.build_lines(self.initial_horizontal_offset, self.first_line_index);
     }
 
     pub fn build_lines(&mut self, horizontal_offset: usize, start_line_number: usize) {

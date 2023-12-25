@@ -48,7 +48,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut state: State) -> Result<(
 
     let mut ui_state = UIState {
         list_state: ListState::default(),
-        horizontal_offset: 0,
+        horizontal_offset: state.initial_horizontal_offset,
     };
 
     ui_state.list_state.select(Some(state.selected_line));

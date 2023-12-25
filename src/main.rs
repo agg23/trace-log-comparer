@@ -5,6 +5,7 @@ use std::{
     path::Path,
 };
 
+use itertools::{EitherOrBoth, Itertools};
 use state::{DiffPosition, State};
 use ui::build_app;
 
@@ -58,8 +59,28 @@ fn main() -> Result<(), io::Error> {
 
         if line1 != line2 {
             if first_diff_positions.is_none() {
+                let find_offset = || -> usize {
+                    for (offset, combined_chars) in
+                        line1.chars().zip_longest(line2.chars()).enumerate()
+                    {
+                        match combined_chars {
+                            EitherOrBoth::Both(char1, char2) => {
+                                if char1 != char2 {
+                                    return offset;
+                                }
+                            }
+                            EitherOrBoth::Left(_) | EitherOrBoth::Right(_) => {
+                                return offset;
+                            }
+                        }
+                    }
+
+                    return 0;
+                };
+
                 first_diff_positions = Some(DiffPosition {
                     line_index,
+                    line_offset: find_offset(),
                     file1_offset,
                     file2_offset,
                 });
