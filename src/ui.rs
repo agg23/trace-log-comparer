@@ -40,7 +40,9 @@ pub fn build_app(state: State) -> Result<(), io::Error> {
 }
 
 fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut state: State) -> Result<(), io::Error> {
-    let mut selected_line = state.selected_line;
+    let size = terminal.get_frame().size();
+
+    state.build_state((size.height as usize) * 2);
 
     let mut start_line_number = 1;
     let mut selected_diff_offset = 0;
@@ -50,7 +52,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut state: State) -> Result<(
         horizontal_offset: 0,
     };
 
-    ui_state.list_state.select(Some(selected_line));
+    ui_state.list_state.select(Some(state.selected_line));
 
     let mut last_keycode: Option<KeyCode> = None;
     let mut key_repeat_count = 0;
@@ -66,10 +68,9 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut state: State) -> Result<(
                 .block(Block::default().borders(Borders::ALL).title("File 1"))
                 .highlight_style(
                     Style::default()
-                        .bg(Color::LightGreen)
+                        .fg(Color::Yellow)
                         .add_modifier(Modifier::BOLD),
-                )
-                .highlight_symbol(">> ");
+                );
 
             f.render_stateful_widget(list1, chunks[0], &mut ui_state.list_state);
 
@@ -77,10 +78,9 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut state: State) -> Result<(
                 .block(Block::default().borders(Borders::ALL).title("File 2"))
                 .highlight_style(
                     Style::default()
-                        .bg(Color::LightGreen)
+                        .fg(Color::Yellow)
                         .add_modifier(Modifier::BOLD),
-                )
-                .highlight_symbol(">> ");
+                );
 
             f.render_stateful_widget(list2, chunks[1], &mut ui_state.list_state);
         })?;
@@ -124,26 +124,42 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut state: State) -> Result<(
 
                         state.build_lines(ui_state.horizontal_offset, start_line_number);
                     }
+                    KeyCode::Down => {
+                        if state.selected_line < state.file1_list_lines.len()
+                            || state.selected_line < state.file2_list_lines.len()
+                        {
+                            state.selected_line += 1;
+                        }
+
+                        ui_state.list_state.select(Some(state.selected_line));
+                    }
+                    KeyCode::Up => {
+                        if state.selected_line > 0 {
+                            state.selected_line -= 1;
+                        }
+
+                        ui_state.list_state.select(Some(state.selected_line));
+                    }
                     KeyCode::Char('N') => {
                         // Prev diff
                         if let Some((prev_diff_line, prev_diff_offset)) =
-                            state.find_prev_diff(selected_line, selected_diff_offset)
+                            state.find_prev_diff(state.selected_line, selected_diff_offset)
                         {
-                            selected_line = prev_diff_line;
+                            state.selected_line = prev_diff_line;
                             selected_diff_offset = prev_diff_offset;
 
-                            ui_state.list_state.select(Some(selected_line));
+                            ui_state.list_state.select(Some(state.selected_line));
                         }
                     }
                     KeyCode::Char('n') => {
                         // Next diff
                         if let Some((next_diff_line, next_diff_offset)) =
-                            state.find_next_diff(selected_line, selected_diff_offset)
+                            state.find_next_diff(state.selected_line, selected_diff_offset)
                         {
-                            selected_line = next_diff_line;
+                            state.selected_line = next_diff_line;
                             selected_diff_offset = next_diff_offset;
 
-                            ui_state.list_state.select(Some(selected_line));
+                            ui_state.list_state.select(Some(state.selected_line));
                         }
                     }
                     KeyCode::Esc => break,

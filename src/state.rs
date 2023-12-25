@@ -64,7 +64,7 @@ impl<'a> State<'a> {
         file1_reader: BufReader<File>,
         file2_reader: BufReader<File>,
     ) -> Self {
-        let mut state = State {
+        State {
             first_diff,
 
             file1_line_positions,
@@ -83,20 +83,16 @@ impl<'a> State<'a> {
 
             file1_list_lines: vec![],
             file2_list_lines: vec![],
-        };
-
-        state.build_state();
-
-        state
+        }
     }
 
-    pub fn build_state(&mut self) {
+    pub fn build_state(&mut self, lines_to_load: usize) {
         let (file1_raw_lines, file2_raw_lines) = if let Some(diff) = &self.first_diff {
             self.selected_line = diff.line_index;
 
-            self.get_lines_around_line(diff.line_index, 20)
+            self.get_lines_around_line(diff.line_index, lines_to_load)
         } else {
-            self.get_lines_around_line(0, 20)
+            self.get_lines_around_line(0, lines_to_load)
         };
 
         self.longest_line_length = longest_line_length(&file1_raw_lines, &file2_raw_lines);
@@ -346,7 +342,7 @@ fn build_spans<'a, 'b>(diffs: &'a Vec<Vec<DiffSection>>) -> (Vec<Spans<'b>>, Vec
                 match diff {
                     DiffSection::Added(string) => line2.0.push(Span::styled(
                         string.clone(),
-                        Style::default().bg(Color::Green).fg(Color::Black),
+                        Style::default().bg(Color::Rgb(0, 100, 0)),
                     )),
                     DiffSection::Modified { left, right } => {
                         line1.0.push(Span::styled(
