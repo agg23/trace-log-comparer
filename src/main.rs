@@ -106,15 +106,13 @@ fn main() -> Result<(), io::Error> {
         println!("File 1 is longer");
     }
 
-    build_app(State {
-        first_diff: first_diff_positions,
-
+    build_app(State::new(
+        first_diff_positions,
         file1_line_positions,
         file2_line_positions,
-
         file1_reader,
         file2_reader,
-    })?;
+    ))?;
 
     Ok(())
 }

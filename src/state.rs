@@ -4,15 +4,33 @@ use std::{
 };
 
 use itertools::{EitherOrBoth, Itertools};
+use tui::{
+    style::{Color, Modifier, Style},
+    text::{Span, Spans},
+    widgets::ListItem,
+};
 
-pub struct State {
-    pub first_diff: Option<DiffPosition>,
+use crate::string::StringUtils;
 
-    pub file1_line_positions: Vec<usize>,
-    pub file2_line_positions: Vec<usize>,
+pub struct State<'a> {
+    first_diff: Option<DiffPosition>,
 
-    pub file1_reader: BufReader<File>,
-    pub file2_reader: BufReader<File>,
+    file1_line_positions: Vec<usize>,
+    file2_line_positions: Vec<usize>,
+
+    file1_reader: BufReader<File>,
+    file2_reader: BufReader<File>,
+
+    line_diffs: Vec<Vec<DiffSection>>,
+
+    pub longest_line_length: usize,
+    pub selected_line: usize,
+
+    file1_spans: Vec<Spans<'a>>,
+    file2_spans: Vec<Spans<'a>>,
+
+    pub file1_list_lines: Vec<ListItem<'a>>,
+    pub file2_list_lines: Vec<ListItem<'a>>,
 }
 
 pub struct DiffPosition {
@@ -29,7 +47,69 @@ pub enum DiffSection {
     Removed(String),
 }
 
-impl State {
+impl<'a> State<'a> {
+    pub fn new(
+        first_diff: Option<DiffPosition>,
+        file1_line_positions: Vec<usize>,
+        file2_line_positions: Vec<usize>,
+        file1_reader: BufReader<File>,
+        file2_reader: BufReader<File>,
+    ) -> Self {
+        let mut state = State {
+            first_diff,
+
+            file1_line_positions,
+            file2_line_positions,
+
+            file1_reader,
+            file2_reader,
+
+            longest_line_length: 0,
+            selected_line: 0,
+
+            line_diffs: vec![],
+
+            file1_spans: vec![],
+            file2_spans: vec![],
+
+            file1_list_lines: vec![],
+            file2_list_lines: vec![],
+        };
+
+        state.build_state();
+
+        state
+    }
+
+    pub fn build_state(&mut self) {
+        let (file1_raw_lines, file2_raw_lines) = if let Some(diff) = &self.first_diff {
+            self.selected_line = diff.line_index;
+
+            self.get_lines_around_line(diff.line_index, 20)
+        } else {
+            self.get_lines_around_line(0, 20)
+        };
+
+        self.longest_line_length = longest_line_length(&file1_raw_lines, &file2_raw_lines);
+
+        self.line_diffs = self.calculate_diffs(&file1_raw_lines, &file2_raw_lines);
+
+        let (file1_spans, file2_spans) = build_spans(&self.line_diffs);
+
+        self.file1_spans = file1_spans;
+        self.file2_spans = file2_spans;
+
+        self.build_lines(0);
+    }
+
+    pub fn build_lines(&mut self, horizontal_offset: usize) {
+        let (file1_list_lines, file2_list_lines) =
+            build_lines(&self.file1_spans, &self.file2_spans, horizontal_offset);
+
+        self.file1_list_lines = file1_list_lines;
+        self.file2_list_lines = file2_list_lines;
+    }
+
     pub fn get_lines_around_line(
         &mut self,
         line_index: usize,
@@ -76,8 +156,12 @@ impl State {
     ) -> Vec<Vec<DiffSection>> {
         file1_lines
             .iter()
-            .zip(file2_lines)
-            .map(|(line1, line2)| self.calculate_line_diffs(line1, line2))
+            .zip_longest(file2_lines)
+            .map(|line| match line {
+                EitherOrBoth::Both(line1, line2) => self.calculate_line_diffs(line1, line2),
+                EitherOrBoth::Left(line1) => vec![DiffSection::Removed(line1.clone())],
+                EitherOrBoth::Right(line2) => vec![DiffSection::Added(line2.clone())],
+            })
             .collect()
     }
 
@@ -168,4 +252,132 @@ impl State {
 
         Ok(buffer)
     }
+}
+
+fn longest_line_length(file1_lines: &Vec<String>, file2_lines: &Vec<String>) -> usize {
+    let mut longest_length = 0;
+
+    for line in file1_lines.iter().chain(file2_lines.iter()) {
+        if line.len() > longest_length {
+            longest_length = line.len();
+        }
+    }
+
+    longest_length
+}
+
+fn build_spans<'a, 'b>(diffs: &'a Vec<Vec<DiffSection>>) -> (Vec<Spans<'b>>, Vec<Spans<'b>>) {
+    diffs
+        .iter()
+        .map(|line_diffs| {
+            let mut line1 = Spans::default();
+            let mut line2 = Spans::default();
+
+            for diff in line_diffs.iter() {
+                match diff {
+                    DiffSection::Added(string) => line2.0.push(Span::styled(
+                        string.clone(),
+                        Style::default().bg(Color::Green).fg(Color::Black),
+                    )),
+                    DiffSection::Modified { left, right } => {
+                        line1.0.push(Span::styled(
+                            left.clone(),
+                            Style::default()
+                                .add_modifier(Modifier::BOLD)
+                                .bg(Color::Blue),
+                        ));
+
+                        line2.0.push(Span::styled(
+                            right.clone(),
+                            Style::default()
+                                .add_modifier(Modifier::BOLD)
+                                .bg(Color::Blue),
+                        ));
+                    }
+                    DiffSection::Same(string) => {
+                        let span = Span::raw(string.clone());
+
+                        line1.0.push(span.clone());
+                        line2.0.push(span);
+                    }
+                    DiffSection::Removed(string) => line1.0.push(Span::styled(
+                        string.clone(),
+                        Style::default().bg(Color::Red),
+                    )),
+                }
+            }
+
+            (line1, line2)
+        })
+        .unzip()
+}
+
+fn build_lines<'a>(
+    file1_spans: &Vec<Spans<'a>>,
+    file2_spans: &Vec<Spans<'a>>,
+    horizontal_offset: usize,
+) -> (Vec<ListItem<'a>>, Vec<ListItem<'a>>) {
+    let add_left_placeholder = |spans: Spans<'a>, original_length: usize| -> ListItem<'a> {
+        let mut string = spans;
+
+        if original_length == 0 {
+            // String was empty to begin with. EOF
+            string = Spans::from(Span::styled(
+                "EOF",
+                Style::default().add_modifier(Modifier::DIM),
+            ));
+        } else if string.width() == 0 {
+            string = Spans::from(Span::styled(
+                "<==",
+                Style::default().add_modifier(Modifier::DIM),
+            ));
+        }
+
+        ListItem::new(string)
+    };
+
+    let process_spans_into_lines = |spans: &Vec<Spans<'a>>| -> Vec<ListItem<'a>> {
+        spans
+            .iter()
+            .map(|spans| {
+                let original_length = spans.width();
+
+                add_left_placeholder(
+                    spans_substring(spans.clone(), horizontal_offset),
+                    original_length,
+                )
+            })
+            .collect()
+    };
+
+    (
+        process_spans_into_lines(file1_spans),
+        process_spans_into_lines(file2_spans),
+    )
+}
+
+fn spans_substring<'a>(spans: Spans<'a>, horizontal_offset: usize) -> Spans<'a> {
+    let mut required_offset = horizontal_offset;
+
+    let spans: Vec<Span<'_>> = spans
+        .0
+        .into_iter()
+        .filter_map(|span| {
+            if required_offset == 0 {
+                // Consume this span
+                Some(span)
+            } else if required_offset < span.width() {
+                // Offset is within this span
+                let text = span.content.slice(required_offset..).to_string().clone();
+                required_offset = 0;
+                Some(Span::styled(text, span.style.clone()))
+            } else {
+                // Offset is not within this span. Skip it
+                required_offset -= span.width();
+                None
+            }
+        })
+        .collect();
+
+    Spans::from(spans)
 }
