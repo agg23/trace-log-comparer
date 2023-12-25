@@ -165,6 +165,24 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut state: State) -> Result<(
                             );
                         }
                     }
+                    KeyCode::Char('$') => {
+                        // End of line
+                        let min_line_length = if state.longest_line_length > 10 {
+                            state.longest_line_length - 10
+                        } else {
+                            0
+                        };
+
+                        ui_state.horizontal_offset = min_line_length;
+
+                        state.build_lines(ui_state.horizontal_offset, state.first_line_index);
+                    }
+                    KeyCode::Char('^') => {
+                        // Start of line
+                        ui_state.horizontal_offset = 0;
+
+                        state.build_lines(ui_state.horizontal_offset, state.first_line_index);
+                    }
                     KeyCode::Esc => break,
                     _ => {}
                 }
