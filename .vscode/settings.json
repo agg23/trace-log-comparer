@@ -1,0 +1,6 @@
+{
+  "rust-analyzer.linkedProjects": [
+    "./Cargo.toml",
+    "./support/trim-to-line/Cargo.toml"
+  ]
+}
