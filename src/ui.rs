@@ -111,7 +111,10 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut state: State) -> Result<(
                         if ui_state.horizontal_offset + horizontal_step_size < min_line_length {
                             ui_state.horizontal_offset += horizontal_step_size;
 
-                            state.build_lines(ui_state.horizontal_offset, state.first_line_index);
+                            state.build_lines(
+                                ui_state.horizontal_offset,
+                                state.first_line_index + 1,
+                            );
                         }
                     }
                     KeyCode::Left => {
@@ -121,7 +124,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut state: State) -> Result<(
                             ui_state.horizontal_offset = 0;
                         }
 
-                        state.build_lines(ui_state.horizontal_offset, state.first_line_index);
+                        state.build_lines(ui_state.horizontal_offset, state.first_line_index + 1);
                     }
                     KeyCode::Down => {
                         if state.selected_line < state.file1_list_lines.len()
@@ -175,13 +178,13 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut state: State) -> Result<(
 
                         ui_state.horizontal_offset = min_line_length;
 
-                        state.build_lines(ui_state.horizontal_offset, state.first_line_index);
+                        state.build_lines(ui_state.horizontal_offset, state.first_line_index + 1);
                     }
                     KeyCode::Char('^') => {
                         // Start of line
                         ui_state.horizontal_offset = 0;
 
-                        state.build_lines(ui_state.horizontal_offset, state.first_line_index);
+                        state.build_lines(ui_state.horizontal_offset, state.first_line_index + 1);
                     }
                     KeyCode::Esc => break,
                     _ => {}

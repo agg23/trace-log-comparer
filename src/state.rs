@@ -120,7 +120,8 @@ impl<'a> State<'a> {
             0
         };
 
-        self.build_lines(self.initial_horizontal_offset, self.first_line_index);
+        // Index into line number
+        self.build_lines(self.initial_horizontal_offset, self.first_line_index + 1);
     }
 
     pub fn build_lines(&mut self, horizontal_offset: usize, start_line_number: usize) {
