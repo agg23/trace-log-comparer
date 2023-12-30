@@ -1,4 +1,5 @@
 use std::{
+    collections::HashSet,
     env,
     fs::File,
     io::{self, BufRead, BufReader},
@@ -16,7 +17,7 @@ mod ui;
 fn main() -> Result<(), io::Error> {
     let args: Vec<String> = env::args().collect();
 
-    if args.len() != 3 {
+    if args.len() < 3 {
         println!("trace-log-comparer expects two arguments, one for each file.");
         println!("Received {} arguments.", args.len());
         return Ok(());
@@ -24,6 +25,17 @@ fn main() -> Result<(), io::Error> {
 
     let file1_path = &args[1];
     let file2_path = &args[2];
+    let skip_line_numbers = if args.len() > 3 {
+        let skip_line_numbers = &args[3..];
+
+        HashSet::from_iter(
+            skip_line_numbers
+                .iter()
+                .map(|line| line.parse::<usize>().expect("Could not parse line number.")),
+        )
+    } else {
+        HashSet::new()
+    };
 
     let mut file1_reader = buf_reader(file1_path).expect("Could not open file 1");
     let mut file2_reader = buf_reader(file2_path).expect("Could not open file 2");
@@ -57,34 +69,34 @@ fn main() -> Result<(), io::Error> {
             }
         }
 
-        if line1 != line2 {
-            if first_diff_positions.is_none() {
-                let find_offset = || -> usize {
-                    for (offset, combined_chars) in
-                        line1.chars().zip_longest(line2.chars()).enumerate()
-                    {
-                        match combined_chars {
-                            EitherOrBoth::Both(char1, char2) => {
-                                if char1 != char2 {
-                                    return offset;
-                                }
-                            }
-                            EitherOrBoth::Left(_) | EitherOrBoth::Right(_) => {
+        if !skip_line_numbers.contains(&line_index)
+            && line1 != line2
+            && first_diff_positions.is_none()
+        {
+            let find_offset = || -> usize {
+                for (offset, combined_chars) in line1.chars().zip_longest(line2.chars()).enumerate()
+                {
+                    match combined_chars {
+                        EitherOrBoth::Both(char1, char2) => {
+                            if char1 != char2 {
                                 return offset;
                             }
                         }
+                        EitherOrBoth::Left(_) | EitherOrBoth::Right(_) => {
+                            return offset;
+                        }
                     }
+                }
 
-                    return 0;
-                };
+                return 0;
+            };
 
-                first_diff_positions = Some(DiffPosition {
-                    line_index,
-                    line_offset: find_offset(),
-                    file1_offset,
-                    file2_offset,
-                });
-            }
+            first_diff_positions = Some(DiffPosition {
+                line_index,
+                line_offset: find_offset(),
+                file1_offset,
+                file2_offset,
+            });
         }
 
         if *line1_length > 0 {
