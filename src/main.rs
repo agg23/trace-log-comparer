@@ -1,5 +1,4 @@
 use std::{
-    collections::HashSet,
     env,
     fs::File,
     io::{self, BufRead, BufReader},
@@ -25,16 +24,12 @@ fn main() -> Result<(), io::Error> {
 
     let file1_path = &args[1];
     let file2_path = &args[2];
-    let skip_line_numbers = if args.len() > 3 {
-        let skip_line_numbers = &args[3..];
-
-        HashSet::from_iter(
-            skip_line_numbers
-                .iter()
-                .map(|line| line.parse::<usize>().expect("Could not parse line number.")),
-        )
+    let skip_past_line = if args.len() > 3 {
+        args[3]
+            .parse::<usize>()
+            .expect("Could not parse line number.")
     } else {
-        HashSet::new()
+        0
     };
 
     let mut file1_reader = buf_reader(file1_path).expect("Could not open file 1");
@@ -69,10 +64,7 @@ fn main() -> Result<(), io::Error> {
             }
         }
 
-        if !skip_line_numbers.contains(&line_index)
-            && line1 != line2
-            && first_diff_positions.is_none()
-        {
+        if line_index + 1 > skip_past_line && line1 != line2 && first_diff_positions.is_none() {
             let find_offset = || -> usize {
                 for (offset, combined_chars) in line1.chars().zip_longest(line2.chars()).enumerate()
                 {
